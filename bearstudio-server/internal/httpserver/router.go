@@ -18,11 +18,27 @@ func newRouter(log *slog.Logger) http.Handler {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(25 * time.Second))
+	r.Use(cors)
 	r.Use(requestLogger(log))
 
 	r.Get("/healthz", handlers.Healthz)
+	r.Get("/hello", handlers.HelloConnection)
 
 	return r
+}
+
+func cors(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Dev-friendly defaults so the Next.js app can call the API from another origin.
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func requestLogger(log *slog.Logger) func(http.Handler) http.Handler {
