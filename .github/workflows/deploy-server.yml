@@ -1,0 +1,56 @@
+# Deploy Go API to ECS over SSH.
+#
+# Required repo Secrets:
+#   SSH_PRIVATE_KEY   — private key for SSH_USER@SSH_HOST (PEM, include newlines)
+#   SSH_HOST          — ECS public hostname or IP
+#   SSH_USER          — e.g. root or ubuntu
+#   DEPLOY_SERVER_DIR — remote directory that contains ./bin/server after deploy (e.g. /opt/bearstudio/bearstudio-server)
+#
+# Remote: passwordless sudo for `systemctl restart bearstudio-server` (or edit the unit name below).
+
+name: Deploy server
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "bearstudio-server/**"
+      - ".github/workflows/deploy-server.yml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: bearstudio-server/go.mod
+          cache-dependency-path: bearstudio-server/go.sum
+
+      - name: Build Linux binary
+        working-directory: bearstudio-server
+        env:
+          CGO_ENABLED: "0"
+          GOOS: linux
+          GOARCH: amd64
+          GOPROXY: https://goproxy.cn,direct
+          GOSUMDB: sum.golang.google.cn
+        run: go build -trimpath -ldflags="-s -w" -o server ./cmd/server
+
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Known hosts
+        run: mkdir -p ~/.ssh && ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Upload binary and restart
+        env:
+          REMOTE: ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}
+          DEPLOY_SERVER_DIR: ${{ secrets.DEPLOY_SERVER_DIR }}
+        run: |
+          set -euo pipefail
+          scp bearstudio-server/server "$REMOTE:/tmp/bearstudio-server.new"
+          ssh "$REMOTE" "set -euo pipefail; DIR='${DEPLOY_SERVER_DIR}'; mkdir -p \"\$DIR/bin\"; install -m 0755 /tmp/bearstudio-server.new \"\$DIR/bin/server\"; rm -f /tmp/bearstudio-server.new; sudo systemctl restart bearstudio-server"

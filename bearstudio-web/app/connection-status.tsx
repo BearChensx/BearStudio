@@ -49,7 +49,7 @@ export function ConnectionStatus() {
   return (
     <div className="mt-8 w-full max-w-md rounded-xl border border-zinc-200 bg-white p-6 text-left shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-        Server link check
+        BearStudio Server link check
       </p>
       {loading ? (
         <p className="mt-3 text-zinc-600 dark:text-zinc-300">Loading…</p>
